@@ -24,6 +24,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -53,6 +55,7 @@ import com.deepclear.app.util.FileSize
 @Composable
 fun HomeScreen(
     onScanComplete: () -> Unit = {},
+    onNavigateToOptimizer: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -129,7 +132,31 @@ fun HomeScreen(
             isScanning = uiState.isScanning
         )
 
-        Spacer(modifier = Modifier.height(48.dp))
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Optimizer shortcut
+        OutlinedButton(
+            onClick = onNavigateToOptimizer,
+            modifier = Modifier
+                .fillMaxWidth(0.55f)
+                .height(44.dp),
+            shape = RoundedCornerShape(22.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Speed,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "Boost RAM",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Medium
+            )
+        }
+
+        Spacer(modifier = Modifier.height(32.dp))
     }
 }
 
