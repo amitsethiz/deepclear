@@ -26,7 +26,9 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.RadioButtonChecked
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
+import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.RestoreFromTrash
+import androidx.compose.material.icons.filled.SdStorage
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -39,8 +41,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
@@ -58,6 +60,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.deepclear.app.data.model.ScannedFile
 import com.deepclear.app.data.scanner.DuplicateGroup
+import com.deepclear.app.data.scanner.EmptyFolder
 import com.deepclear.app.ui.theme.Teal
 import com.deepclear.app.util.FileSize
 
@@ -68,7 +71,7 @@ fun ToolsScreen(
     viewModel: ToolsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val tabs = listOf("Trash", "Duplicates")
+    val tabs = listOf("Trash", "Duplicates", "Large Files", "Empty Dirs")
 
     Scaffold(
         topBar = {
@@ -92,10 +95,11 @@ fun ToolsScreen(
                 .background(MaterialTheme.colorScheme.background)
         ) {
             // Tab Row
-            TabRow(
+            ScrollableTabRow(
                 selectedTabIndex = uiState.activeTab,
                 containerColor = MaterialTheme.colorScheme.surface,
                 contentColor = MaterialTheme.colorScheme.primary,
+                edgePadding = 16.dp,
                 indicator = { tabPositions ->
                     TabRowDefaults.SecondaryIndicator(
                         modifier = Modifier.tabIndicatorOffset(tabPositions[uiState.activeTab]),
@@ -115,6 +119,8 @@ fun ToolsScreen(
             when (uiState.activeTab) {
                 0 -> TrashTab(uiState, viewModel)
                 1 -> DuplicatesTab(uiState, viewModel)
+                2 -> LargeFilesTab(uiState, viewModel)
+                3 -> EmptyFoldersTab(uiState, viewModel)
             }
         }
     }
@@ -487,3 +493,192 @@ private fun DuplicateGroupCard(
         }
     }
 }
+
+// ═══════════════ LARGE FILES TAB ═══════════════
+
+@Composable
+private fun LargeFilesTab(uiState: ToolsUiState, viewModel: ToolsViewModel) {
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        if (!uiState.largeFileScanned && !uiState.isLargeFileScanning) {
+            item {
+                ScanActionCard(
+                    icon = Icons.Default.SdStorage,
+                    title = "Find Large Files",
+                    description = "Locate files larger than 50 MB",
+                    onClick = { viewModel.scanLargeFiles() }
+                )
+            }
+        }
+
+        if (uiState.isLargeFileScanning) {
+            item { ScanningIndicator("Scanning for large files...") }
+        }
+
+        if (uiState.largeFileScanned && uiState.largeFiles.isEmpty()) {
+            item { EmptyState("No large files found", "No files over 50 MB detected!") }
+        }
+
+        if (uiState.largeFiles.isNotEmpty()) {
+            item {
+                Text(
+                    text = "${uiState.largeFiles.size} files • ${FileSize.format(uiState.largeFileTotalSize)} total",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+
+            itemsIndexed(uiState.largeFiles) { index, file ->
+                TrashFileItem(file) { viewModel.toggleLargeFileSelection(index) }
+            }
+
+            val selectedCount = uiState.largeFiles.count { it.isSelected }
+            if (selectedCount > 0) {
+                item {
+                    val selectedSize = uiState.largeFiles.filter { it.isSelected }.sumOf { it.sizeBytes }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        onClick = { viewModel.shredSelectedLargeFiles() },
+                        modifier = Modifier.fillMaxWidth().height(50.dp),
+                        shape = RoundedCornerShape(25.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error
+                        ),
+                        enabled = !uiState.isShredding
+                    ) {
+                        Icon(Icons.Default.DeleteForever, null, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            "Shred $selectedCount files (${FileSize.format(selectedSize)})",
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        }
+
+        item { Spacer(modifier = Modifier.height(24.dp)) }
+    }
+}
+
+// ═══════════════ EMPTY FOLDERS TAB ═══════════════
+
+@Composable
+private fun EmptyFoldersTab(uiState: ToolsUiState, viewModel: ToolsViewModel) {
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        if (!uiState.emptyFolderScanned && !uiState.isEmptyFolderScanning) {
+            item {
+                ScanActionCard(
+                    icon = Icons.Default.FolderOpen,
+                    title = "Find Empty Folders",
+                    description = "Detect empty directories wasting space",
+                    onClick = { viewModel.scanEmptyFolders() }
+                )
+            }
+        }
+
+        if (uiState.isEmptyFolderScanning) {
+            item { ScanningIndicator("Scanning directories...") }
+        }
+
+        if (uiState.emptyFolderScanned && uiState.emptyFolders.isEmpty()) {
+            item { EmptyState("No empty folders found", "All directories contain files!") }
+        }
+
+        if (uiState.emptyFolderDeletedCount > 0) {
+            item { ResultBanner("${uiState.emptyFolderDeletedCount} empty folders removed!") }
+        }
+
+        if (uiState.emptyFolders.isNotEmpty()) {
+            item {
+                Text(
+                    text = "${uiState.emptyFolders.size} empty folders found",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+
+            itemsIndexed(uiState.emptyFolders) { index, folder ->
+                EmptyFolderItem(folder) { viewModel.toggleEmptyFolderSelection(index) }
+            }
+
+            val selectedCount = uiState.emptyFolders.count { it.isSelected }
+            if (selectedCount > 0) {
+                item {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        onClick = { viewModel.deleteEmptyFolders() },
+                        modifier = Modifier.fillMaxWidth().height(50.dp),
+                        shape = RoundedCornerShape(25.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Teal
+                        )
+                    ) {
+                        Icon(Icons.Default.Delete, null, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Remove $selectedCount folders", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
+        item { Spacer(modifier = Modifier.height(24.dp)) }
+    }
+}
+
+@Composable
+private fun EmptyFolderItem(folder: EmptyFolder, onToggle: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onToggle() }
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Checkbox(
+                checked = folder.isSelected,
+                onCheckedChange = { onToggle() },
+                colors = CheckboxDefaults.colors(checkedColor = Teal)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Icon(
+                Icons.Default.FolderOpen,
+                null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = folder.name,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = folder.path,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
