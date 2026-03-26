@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Ocean Fresh Palette - Light -->
+    <color name="deep_blue">#FF0D47A1</color>
+    <color name="deep_blue_dark">#FF0A3270</color>
+    <color name="teal">#FF00BFA5</color>
+    <color name="teal_light">#FF1DE9B6</color>
+    <color name="teal_dark">#FF00897B</color>
+    <color name="cyan">#FF00E5FF</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="light_gray">#FFF5F7FA</color>
+    <color name="medium_gray">#FFE0E4E8</color>
+
+    <!-- Ocean Fresh Palette - Dark -->
+    <color name="charcoal">#FF1A1A2E</color>
+    <color name="charcoal_light">#FF232342</color>
+    <color name="charcoal_surface">#FF16213E</color>
+
+    <!-- Semantic -->
+    <color name="error_red">#FFEF5350</color>
+    <color name="warning_amber">#FFFFB300</color>
+    <color name="success_green">#FF66BB6A</color>
+</resources>
