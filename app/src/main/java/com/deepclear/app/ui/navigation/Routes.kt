@@ -7,5 +7,6 @@ object Routes {
     const val HOME = "home"
     const val SCAN_RESULTS = "scan_results"
     const val OPTIMIZER = "optimizer"
+    const val TOOLS = "tools"
     const val SETTINGS = "settings"
 }
