@@ -6,13 +6,18 @@ import androidx.lifecycle.viewModelScope
 import com.deepclear.app.data.model.ScannedFile
 import com.deepclear.app.data.scanner.DuplicateFinder
 import com.deepclear.app.data.scanner.DuplicateGroup
+import com.deepclear.app.data.scanner.EmptyFolder
+import com.deepclear.app.data.scanner.EmptyFolderScanner
+import com.deepclear.app.data.scanner.LargeFileScanner
 import com.deepclear.app.data.scanner.SecureShredder
 import com.deepclear.app.data.scanner.TrashScanner
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 data class ToolsUiState(
@@ -29,6 +34,18 @@ data class ToolsUiState(
     val duplicatePhase: String = "",
     val duplicateWastedSize: Long = 0L,
 
+    // Large Files
+    val largeFiles: List<ScannedFile> = emptyList(),
+    val isLargeFileScanning: Boolean = false,
+    val largeFileScanned: Boolean = false,
+    val largeFileTotalSize: Long = 0L,
+
+    // Empty Folders
+    val emptyFolders: List<EmptyFolder> = emptyList(),
+    val isEmptyFolderScanning: Boolean = false,
+    val emptyFolderScanned: Boolean = false,
+    val emptyFolderDeletedCount: Int = 0,
+
     // Shredder
     val isShredding: Boolean = false,
     val shredProgress: String = "",
@@ -44,6 +61,8 @@ class ToolsViewModel @Inject constructor(
     private val trashScanner: TrashScanner,
     private val duplicateFinder: DuplicateFinder,
     private val secureShredder: SecureShredder,
+    private val largeFileScanner: LargeFileScanner,
+    private val emptyFolderScanner: EmptyFolderScanner,
     application: Application
 ) : AndroidViewModel(application) {
 
@@ -113,6 +132,67 @@ class ToolsViewModel @Inject constructor(
         }
     }
 
+    // ── Large File Radar ──────────────────────────────
+    fun scanLargeFiles() {
+        if (_uiState.value.isLargeFileScanning) return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLargeFileScanning = true, largeFileScanned = false)
+            largeFileScanner.scan().collect { progress ->
+                if (progress.isComplete) {
+                    _uiState.value = _uiState.value.copy(
+                        largeFiles = progress.files,
+                        isLargeFileScanning = false,
+                        largeFileScanned = true,
+                        largeFileTotalSize = progress.files.sumOf { it.sizeBytes }
+                    )
+                }
+            }
+        }
+    }
+
+    fun toggleLargeFileSelection(index: Int) {
+        val files = _uiState.value.largeFiles.toMutableList()
+        if (index in files.indices) {
+            files[index] = files[index].copy(isSelected = !files[index].isSelected)
+            _uiState.value = _uiState.value.copy(largeFiles = files)
+        }
+    }
+
+    // ── Empty Folder Sweeper ──────────────────────────
+    fun scanEmptyFolders() {
+        if (_uiState.value.isEmptyFolderScanning) return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isEmptyFolderScanning = true, emptyFolderScanned = false)
+            emptyFolderScanner.scan().collect { progress ->
+                if (progress.isComplete) {
+                    _uiState.value = _uiState.value.copy(
+                        emptyFolders = progress.folders,
+                        isEmptyFolderScanning = false,
+                        emptyFolderScanned = true
+                    )
+                }
+            }
+        }
+    }
+
+    fun toggleEmptyFolderSelection(index: Int) {
+        val folders = _uiState.value.emptyFolders.toMutableList()
+        if (index in folders.indices) {
+            folders[index] = folders[index].copy(isSelected = !folders[index].isSelected)
+            _uiState.value = _uiState.value.copy(emptyFolders = folders)
+        }
+    }
+
+    fun deleteEmptyFolders() {
+        viewModelScope.launch {
+            val count = withContext(Dispatchers.IO) {
+                emptyFolderScanner.deleteEmptyFolders(_uiState.value.emptyFolders)
+            }
+            _uiState.value = _uiState.value.copy(emptyFolderDeletedCount = count)
+            scanEmptyFolders() // Refresh
+        }
+    }
+
     // ── Secure Shredder ─────────────────────────────
     fun shredSelectedTrash() {
         val selectedPaths = _uiState.value.trashFiles
@@ -135,6 +215,14 @@ class ToolsViewModel @Inject constructor(
         shredFiles(filesToDelete)
     }
 
+    fun shredSelectedLargeFiles() {
+        val selectedPaths = _uiState.value.largeFiles
+            .filter { it.isSelected }
+            .map { it.path }
+        if (selectedPaths.isEmpty()) return
+        shredFiles(selectedPaths)
+    }
+
     private fun shredFiles(paths: List<String>) {
         if (_uiState.value.isShredding) return
         viewModelScope.launch {
@@ -147,9 +235,10 @@ class ToolsViewModel @Inject constructor(
                         bytesShredded = progress.totalBytesShredded,
                         shredProgress = ""
                     )
-                    // Refresh data
+                    // Refresh all data
                     scanTrash()
                     scanDuplicates()
+                    scanLargeFiles()
                 } else {
                     _uiState.value = _uiState.value.copy(
                         shredProgress = "Shredding: ${progress.currentFile} (${progress.processedFiles}/${progress.totalFiles})"
