@@ -4,6 +4,8 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.deepclear.app.data.model.ScannedFile
+import com.deepclear.app.data.scanner.BrowserCacheCleaner
+import com.deepclear.app.data.scanner.BrowserCacheInfo
 import com.deepclear.app.data.scanner.DuplicateFinder
 import com.deepclear.app.data.scanner.DuplicateGroup
 import com.deepclear.app.data.scanner.EmptyFolder
@@ -46,6 +48,15 @@ data class ToolsUiState(
     val emptyFolderScanned: Boolean = false,
     val emptyFolderDeletedCount: Int = 0,
 
+    // Browser Cache
+    val browserCaches: List<BrowserCacheInfo> = emptyList(),
+    val isBrowserScanning: Boolean = false,
+    val browserScanned: Boolean = false,
+    val isBrowserClearing: Boolean = false,
+    val browserClearedBytes: Long = 0L,
+    val browserClearComplete: Boolean = false,
+    val browserTotalCacheSize: Long = 0L,
+
     // Shredder
     val isShredding: Boolean = false,
     val shredProgress: String = "",
@@ -63,6 +74,7 @@ class ToolsViewModel @Inject constructor(
     private val secureShredder: SecureShredder,
     private val largeFileScanner: LargeFileScanner,
     private val emptyFolderScanner: EmptyFolderScanner,
+    private val browserCacheCleaner: BrowserCacheCleaner,
     application: Application
 ) : AndroidViewModel(application) {
 
@@ -189,7 +201,55 @@ class ToolsViewModel @Inject constructor(
                 emptyFolderScanner.deleteEmptyFolders(_uiState.value.emptyFolders)
             }
             _uiState.value = _uiState.value.copy(emptyFolderDeletedCount = count)
-            scanEmptyFolders() // Refresh
+            scanEmptyFolders()
+        }
+    }
+
+    // ── Browser Cache Cleaner ──────────────────────────
+    fun scanBrowserCaches() {
+        if (_uiState.value.isBrowserScanning) return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                isBrowserScanning = true,
+                browserScanned = false,
+                browserClearComplete = false
+            )
+            browserCacheCleaner.scanBrowserCaches().collect { progress ->
+                if (progress.isComplete) {
+                    _uiState.value = _uiState.value.copy(
+                        browserCaches = progress.browsers,
+                        isBrowserScanning = false,
+                        browserScanned = true,
+                        browserTotalCacheSize = progress.browsers.sumOf { it.cacheSize }
+                    )
+                }
+            }
+        }
+    }
+
+    fun toggleBrowserSelection(index: Int) {
+        val caches = _uiState.value.browserCaches.toMutableList()
+        if (index in caches.indices) {
+            caches[index] = caches[index].copy(isSelected = !caches[index].isSelected)
+            _uiState.value = _uiState.value.copy(browserCaches = caches)
+        }
+    }
+
+    fun clearSelectedBrowserCaches() {
+        val selected = _uiState.value.browserCaches.filter { it.isSelected }
+        if (selected.isEmpty()) return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isBrowserClearing = true, browserClearComplete = false)
+            browserCacheCleaner.clearBrowserCaches(_uiState.value.browserCaches).collect { progress ->
+                if (progress.isComplete) {
+                    _uiState.value = _uiState.value.copy(
+                        isBrowserClearing = false,
+                        browserClearComplete = true,
+                        browserClearedBytes = progress.totalClearedBytes
+                    )
+                    scanBrowserCaches()
+                }
+            }
         }
     }
 
@@ -235,7 +295,6 @@ class ToolsViewModel @Inject constructor(
                         bytesShredded = progress.totalBytesShredded,
                         shredProgress = ""
                     )
-                    // Refresh all data
                     scanTrash()
                     scanDuplicates()
                     scanLargeFiles()
