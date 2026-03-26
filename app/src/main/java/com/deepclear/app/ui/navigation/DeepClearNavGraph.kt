@@ -7,6 +7,7 @@ import androidx.navigation.compose.rememberNavController
 import com.deepclear.app.ui.home.HomeScreen
 import com.deepclear.app.ui.optimizer.OptimizerScreen
 import com.deepclear.app.ui.scan.ScanResultsScreen
+import com.deepclear.app.ui.tools.ToolsScreen
 
 @Composable
 fun DeepClearNavGraph() {
@@ -23,6 +24,9 @@ fun DeepClearNavGraph() {
                 },
                 onNavigateToOptimizer = {
                     navController.navigate(Routes.OPTIMIZER)
+                },
+                onNavigateToTools = {
+                    navController.navigate(Routes.TOOLS)
                 }
             )
         }
@@ -37,6 +41,14 @@ fun DeepClearNavGraph() {
 
         composable(Routes.OPTIMIZER) {
             OptimizerScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable(Routes.TOOLS) {
+            ToolsScreen(
                 onNavigateBack = {
                     navController.popBackStack()
                 }

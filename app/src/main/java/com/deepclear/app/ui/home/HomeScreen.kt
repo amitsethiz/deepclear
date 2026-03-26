@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Button
@@ -56,6 +57,7 @@ import com.deepclear.app.util.FileSize
 fun HomeScreen(
     onScanComplete: () -> Unit = {},
     onNavigateToOptimizer: () -> Unit = {},
+    onNavigateToTools: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -155,8 +157,31 @@ fun HomeScreen(
                 fontWeight = FontWeight.Medium
             )
         }
+        Spacer(modifier = Modifier.height(12.dp))
 
-        Spacer(modifier = Modifier.height(32.dp))
+        // Tools shortcut
+        OutlinedButton(
+            onClick = onNavigateToTools,
+            modifier = Modifier
+                .fillMaxWidth(0.55f)
+                .height(44.dp),
+            shape = RoundedCornerShape(22.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Shield,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "Tools",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Medium
+            )
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
     }
 }
 
